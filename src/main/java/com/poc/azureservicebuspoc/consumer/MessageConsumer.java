@@ -8,25 +8,35 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
+import javax.annotation.PostConstruct;
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.TextMessage;
 
+import com.azure.spring.cloud.autoconfigure.implementation.servicebus.properties.AzureServiceBusProperties;
 import com.poc.azureservicebuspoc.model.Consignment;
 import com.poc.azureservicebuspoc.model.ConsignmentData;
+import com.poc.azureservicebuspoc.repository.ConsignmentDataRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.qpid.jms.message.JmsObjectMessage;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 @Component
+@Slf4j
+@RequiredArgsConstructor
 public class MessageConsumer {
 
-    private final static Logger LOG = Logger.getLogger(MessageConsumer.class.getName());
+    //private final static Logger LOG = Logger.getLogger(MessageConsumer.class.getName());
 
-    private static final String TOPIC_NAME = "test-topic6";
-    private static final String QUEUE_NAME = TOPIC_NAME + "/Subscriptions/test-sub/$deadletterqueue";
-    private static final String SUBSCRIPTION_NAME = "test-sub";
+    private static final String TOPIC_NAME = "test-topic";
+    private static final String QUEUE_NAME = TOPIC_NAME + "/Subscriptions/test-sub-d";
+    private static final String SUBSCRIPTION_NAME = "test-sub-d";
 
     private static AtomicLong counter = new AtomicLong(0);
     private static AtomicLong duplicate = new AtomicLong(0);
@@ -34,6 +44,11 @@ public class MessageConsumer {
     private Instant start = Instant.now();
 
     private static Map<UUID, Boolean> IDS = new ConcurrentHashMap();
+
+    private final ConsignmentDataRepository consignmentDataRepository;
+
+    /*@Autowired
+    private AzureServiceBusProperties properties;*/
 
     /*@JmsListener(destination = TOPIC_NAME, containerFactory = "topicJmsListenerContainerFactory",
             subscription = SUBSCRIPTION_NAME, id = "listener1")*/
@@ -50,19 +65,22 @@ public class MessageConsumer {
     }
 
     private void process1(Message message) throws JMSException {
+        UUID batchId = null;
         try {
             if(message instanceof JmsObjectMessage) {
                 ConsignmentData consignmentData = (ConsignmentData) ((JmsObjectMessage) message).getObject();
-                if(IDS.containsKey(consignmentData.getBatchId())) {
+                batchId = consignmentData.getBatchId();
+                if(IDS.containsKey(batchId)) {
                     duplicate.getAndIncrement();
-                    System.out.println("========== Duplicate key received========= times " + duplicate.get());
+                    System.out.println("========== Duplicate ID => " + batchId);
                     message.acknowledge();
                     return;
                 }
-                counter.getAndIncrement();
+                counter.getAndAdd(1);
+               System.out.println("============== Received message ID => " + batchId);
+                IDS.put(batchId, true);
                 process(consignmentData).thenAccept(o -> {
                     try {
-                        IDS.put(consignmentData.getBatchId(), true);
                         message.acknowledge();
                     } catch (JMSException e) {
                         e.printStackTrace();
@@ -71,15 +89,15 @@ public class MessageConsumer {
                 Instant end = Instant.now();
                 long seconds = Duration.between(start, end).getSeconds();
                 if(seconds >= 60) {
-                    System.out.println("======= Messages received per minute => " + counter.get());
+                    //System.out.println("======= Messages received per minute => " + counter.get());
                     start = Instant.now();
                     counter.set(0);
                 }
                 //LOG.info("Received message: " + ((JmsObjectMessage) message).getObject().toString());
-            } else if(message instanceof TextMessage)
+            } /*else if(message instanceof TextMessage)
                 LOG.info("Received message: " + ((TextMessage) message).getText());
             else
-                LOG.severe("Unknown Message Format:");
+                LOG.severe("Unknown Message Format:");*/
 
            // process();
 
@@ -89,23 +107,27 @@ public class MessageConsumer {
             message.acknowledge();*/
         } catch (InterruptedException ex) {
             System.out.println("=========== Interrupted ========== ");
+        } catch(Exception ex) {
+            if(null != batchId)
+                IDS.remove(batchId);
+            throw new RuntimeException("Unable to process message -> " + ObjectUtils.defaultIfNull(batchId, "Unknow Batch Id"));
         }
     }
     @Async("threadPoolTaskExecutor")
     CompletableFuture<Integer> process(ConsignmentData consignment) throws InterruptedException {
-        System.out.println("============== Received message number => " + counter.get());
-        Thread.sleep(5000);
+        consignmentDataRepository.save(consignment);
+        log.info(consignment.getBatchId().toString());
+        Thread.sleep(1300000);
         return CompletableFuture.completedFuture(5);
     }
 
-    /*@JmsListener(destination = QUEUE_NAME, containerFactory = "customJmsListenerContainerFactory",
-    subscription = "test-sub-dlq")
+    //@JmsListener(destination = TOPIC_NAME, containerFactory = "jmsListenerContainerFactory", subscription = "test-sub")
     public void processQueueMessage(Message message) throws JMSException {
         if(message instanceof JmsObjectMessage)
-            LOG.info("Received message: " + ((JmsObjectMessage) message).getObject().toString());
+            log.info("Received message: " + ((JmsObjectMessage) message).getObject().toString());
         else if(message instanceof TextMessage)
-            LOG.info("Received message: " + ((TextMessage) message).getText());
+            log.info("Received message: " + ((TextMessage) message).getText());
         else
-            LOG.severe("Unknown Message Format:");
-    }*/
+            log.info("Unknown Message Format:");
+    }
 }

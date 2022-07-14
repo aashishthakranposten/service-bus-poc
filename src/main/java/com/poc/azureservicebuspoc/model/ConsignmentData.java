@@ -1,20 +1,24 @@
 package com.poc.azureservicebuspoc.model;
 
+import lombok.Data;
+import lombok.ToString;
+
+import javax.persistence.*;
 import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
-
-@Getter
-@Setter
+@Entity
+@Data
 @ToString
-@Builder(toBuilder = true)
+@Table(name = "consignment_data")
 public class ConsignmentData implements Serializable {
 
+    private static final long serialVersionUID = 1L;
+
+    @Id
     private UUID batchId;
+
+    @OneToMany(orphanRemoval = true, cascade = CascadeType.ALL)
     private List<Consignment> consignments;
 }

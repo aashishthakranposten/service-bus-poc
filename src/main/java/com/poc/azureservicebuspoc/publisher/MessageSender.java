@@ -14,14 +14,14 @@ import org.springframework.jms.core.JmsTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-@Component
+//@Component
 public class MessageSender {
 
     //Queue/Topic name
-    private static final String DESTINATION_NAME = "test-topic6";
+    private static final String DESTINATION_NAME = "test-topic";
 
-    @Autowired
-    private JmsTemplate jmsTemplate;
+//    @Autowired
+//    private JmsTemplate jmsTemplate;
 
     //private static AtomicLong counter = new AtomicLong(0);
 
@@ -34,7 +34,7 @@ public class MessageSender {
 
     }
 
-    @Scheduled(fixedDelay = 60000)
+    /*@Scheduled(fixedRate = 60000)
     public void sendMessage() {
         int count = 0;
         try {
@@ -42,7 +42,6 @@ public class MessageSender {
                 jmsTemplate.convertAndSend(DESTINATION_NAME, createConsignmentData());
                 count++;
             }
-            System.exit(0);
             //counter.getAndIncrement();
 
         } catch (Exception ex) {
@@ -62,5 +61,5 @@ public class MessageSender {
         Consignment consignment = new Consignment();
         consignment.setUuid(UUID.randomUUID());
         return consignment;
-    }
+    }*/
 }
